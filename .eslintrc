@@ -1,0 +1,36 @@
+{
+	"env": {
+		"browser": true,
+		"es6": true,
+		"jquery": true
+	},
+	"extends": [
+		"eslint:recommended",
+		"plugin:@typescript-eslint/recommended" // Uses the recommended rules from the @typescript-eslint/eslint-plugin
+    ],
+	"parserOptions": {
+		"ecmaVersion": 11,
+		"sourceType": "module",
+		"ecmaFeatures": {
+		}
+	},
+	"rules": {
+		"eqeqeq": 0,
+		"indent": [ "warn", 4, {
+			"ignoreComments": true,
+			"SwitchCase": 1,
+			"MemberExpression": 0,
+			"offsetTernaryExpressions": false
+		} ],
+		"linebreak-style": ["warn","unix"],
+		"no-alert": 0,
+		"no-cond-assign": [ "error", "except-parens" ],
+		"no-empty": ["error", { "allowEmptyCatch": true }],
+		"no-prototype-builtins": 0,
+		"no-unreachable": "warn",
+		"no-constant-condition": "warn",
+		"@typescript-eslint/no-unused-vars": [ "warn", { "argsIgnorePattern": "^_" } ],
+		"semi": [ "error", "always", { "omitLastInOneLineBlock": true } ],
+		"quotes": [ "error", "single", { "allowTemplateLiterals": true, "avoidEscape": true } ]
+	}
+}

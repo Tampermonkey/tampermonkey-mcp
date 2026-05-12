@@ -11,6 +11,7 @@ async function main() {
     const host = 'localhost';
 
     if (transport === 'http') {
+        console.set(VERBOSE);
         await http(host, port);
     } else if (transport === 'stdio') {
         console.set(VERBOSE, true);

@@ -110,7 +110,8 @@ export async function createMcpMiddleware(endpoint: string): Promise<(req: Reque
             // Reuse existing transport
             transport = transports[sessionId];
         } else if (!sessionId && isInitializeRequest(req.body)) {
-            // New initialization request
+            // New initialization request - create new server and transport per session
+            const server = await createServer();
             transport = new StreamableHTTPServerTransport({
                 sessionIdGenerator: () => randomUUID(),
                 onsessioninitialized: (sessionId) => {
@@ -175,7 +176,8 @@ export async function createMcpMiddleware(endpoint: string): Promise<(req: Reque
         return await handleSessionRequest(req, res);
     });
 
-    await init();
+    // Pre-create server to register tools (will be reused for first session)
+    await createServer();
 
     return function(req: Request, res: Response, next: NextFunction) {
         if (!req.path.startsWith(endpoint)) {
@@ -187,8 +189,8 @@ export async function createMcpMiddleware(endpoint: string): Promise<(req: Reque
 
 export async function stdio(): Promise<void> {
     const transport = new StdioServerTransport();
+    const server = await getStdioServer();
 
-    await init();
     await server.connect(transport)
     .catch((error) => {
         console.error('Fatal error in stdio():', error);
@@ -196,31 +198,56 @@ export async function stdio(): Promise<void> {
     });
 }
 
-// Create server instance
-let server: McpServer;
+// Create server instance for stdio mode (single connection)
+let stdioServer: McpServer;
+let stdioInitialized = false;
 
-async function init(): Promise<string | undefined> {
-    let system: string | undefined;
-
-    if (!server) {
-        server = new McpServer({
+/**
+ * Get or create the stdio server instance.
+ * This is a singleton for stdio mode which only supports one connection.
+ */
+async function getStdioServer(): Promise<McpServer> {
+    if (!stdioServer) {
+        stdioServer = new McpServer({
             name: 'tampermonkey-mcp',
             version: '1.0.0',
         });
     }
 
+    if (!stdioInitialized) {
+        try {
+            await initTampermonkey(stdioServer);
+            stdioInitialized = true;
+        } catch(error) {
+            console.error('Fatal error in getStdioServer():', error);
+            process.exit(1);
+        }
+    }
+
+    return stdioServer;
+}
+
+/**
+ * Create a new server instance with all tools registered.
+ * Each HTTP session needs its own server instance to avoid transport conflicts.
+ */
+async function createServer(): Promise<McpServer> {
+    const server = new McpServer({
+        name: 'tampermonkey-mcp',
+        version: '1.0.0',
+    });
+
     try {
         await initTampermonkey(server);
     } catch(error) {
-        console.error('Fatal error in init():', error);
+        console.error('Fatal error in createServer():', error);
         process.exit(1);
     }
 
-    return system;
+    return server;
 }
 
-export async function proxy(transport: Transport): Promise<string | undefined> {
-    const s = await init();
+export async function proxy(transport: Transport): Promise<void> {
+    const server = await getStdioServer();
     await server.connect(transport);
-    return s;
 }

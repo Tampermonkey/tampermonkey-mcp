@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Tampermonkey/tampermonkey-mcp",
+  "description": "MCP server to manage your Tampermonkey scripts",
+  "repository": {
+    "url": "https://github.com/Tampermonkey/tampermonkey-mcp",
+    "source": "github"
+  },
+  "version": "0.0.4",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "tampermonkey-mcp",
+      "version": "0.0.3",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": []
+    }
+  ]
+}

@@ -213,21 +213,3 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | npx -y tampermonkey-mcp
 echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tampermonkey.list","arguments":{"pattern":""}}}' | npx -y tampermonkey-mcp
 ```
-
-# Example userscripts
-
-This directory contains example userscripts that you can install via Tampermonkey:
-
-## Heise.de Cookie Banner Remover
-
-Removes the cookie consent banner on heise.de:
-
-```bash
-scripts/heise-cookie-remover.user.js
-```
-
-To install:
-1. Open Tampermonkey dashboard
-2. Click "Create new script"
-3. Copy the contents of `scripts/heise-cookie-remover.user.js`
-4. Save and visit https://www.heise.de/

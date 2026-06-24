@@ -23,7 +23,7 @@ Finally configure your AI assistant to use the `tampermonkey` tool:
   }
 }
 ```
-Your assistant will call `tampermonkey.get-connection-code` and return a connection code that you can enter in the Tampermonkey Editors extension.
+Your assistant will call `tampermonkey_get_connection_code` and return a connection code that you can enter in the Tampermonkey Editors extension.
 
 # Claude Code configuration example
 ```
@@ -82,10 +82,10 @@ This project implements an MCP (Model Context Protocol) server that allows AI as
 │                                  ▼                                          │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │  tampermonkey.ts              │  MCP Tool Definitions                 │  │
-│  │                               │  - tampermonkey.get-connection-code   │  │
-│  │                               │  - tampermonkey.list                  │  │
-│  │                               │  - tampermonkey.get                   │  │
-│  │                               │  - tampermonkey.patch                 │  │
+│  │                               │  - tampermonkey_get_connection_code   │  │
+│  │                               │  - tampermonkey_list                  │  │
+│  │                               │  - tampermonkey_get                   │  │
+│  │                               │  - tampermonkey_patch                 │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                  │                                          │
 │                                  ▼                                          │
@@ -124,7 +124,7 @@ This project implements an MCP (Model Context Protocol) server that allows AI as
 
 1. **MCP Server starts** - Creates WebSocket server on a random available port
 2. **Connection code generated** - Format: `<base32(port - 1024)><auth_token><echo_token>`
-3. **User calls `tampermonkey.get-connection-code`** - Gets the connection code
+3. **User calls `tampermonkey_get_connection_code`** - Gets the connection code
 4. **User enters code in Tampermonkey Editors** - Extension parses code to get port and auth
 5. **Extension connects to MCP server** - WebSocket handshake with authentication
 6. **MCP tools become available** - list, get, patch can now be called
@@ -151,33 +151,33 @@ Extension                              MCP Server
 
 ## MCP Tools
 
-### `tampermonkey.get-connection-code`
+### `tampermonkey_get_connection_code`
 * **Purpose**: Initialize connection by getting the WebSocket connection code.
 * **Required**: Must be called first to start the WebSocket server.
 * **Output**: Connection code to enter in Tampermonkey Editors.
 
-### `tampermonkey.list`
+### `tampermonkey_list`
 * **Purpose**: List all available userscripts.
 * **Input**: Optional filter by name pattern or include URL pattern.
 * **Output**: Array of userscript metadata (name, namespace, path, requires).
 
-### `tampermonkey.get`
+### `tampermonkey_get`
 * **Purpose**: Get content of a specific userscript.
 * **Input**: `path` (from list), optional `ifNotModifiedSince` timestamp.
 * **Output**: Script content, lastModified timestamp, or error.
 
-### `tampermonkey.patch`
+### `tampermonkey_patch`
 * **Purpose**: Update userscript content.
 * **Input**: `path`, `value` (new content), optional `lastModified` for optimistic locking.
 * **Output**: Success confirmation or error.
 
-### `tampermonkey.put`
+### `tampermonkey_put`
 * **Purpose**: Create a new userscript with the given name and namespace.
 * **Input**: `value` (new script), optional `lastModified`.
 * **Output**: Success confirmation, path of created script, or error.
 * **Requires**: Tampermonkey Editors 1.0.6+
 
-### `tampermonkey.delete`
+### `tampermonkey_delete`
 * **Purpose**: Delete an existing userscript.
 * **Input**: `path` (from list).
 * **Output**: Success confirmation or error.
@@ -211,5 +211,5 @@ curl -X POST http://localhost:4001/mcp \
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test-client","version":"1.0.0"},"capabilities":{}}}' | npx -y tampermonkey-mcp
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | npx -y tampermonkey-mcp
-echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tampermonkey.list","arguments":{"pattern":""}}}' | npx -y tampermonkey-mcp
+echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tampermonkey_list","arguments":{"pattern":""}}}' | npx -y tampermonkey-mcp
 ```

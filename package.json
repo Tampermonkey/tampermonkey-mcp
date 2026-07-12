@@ -6,7 +6,7 @@
   "scripts": {
     "init": "",
     "build": "tsc && node scripts/add-js-extensions.mjs",
-    "clean": "rm -rf dist",
+    "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true })\"",
     "lint": "eslint src --ext .ts",
     "all": "npm run clean && npm run build && npm run lint",
     "start": "node dist/index.js",

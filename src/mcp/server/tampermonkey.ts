@@ -27,16 +27,16 @@ async function getServer(): Promise<TampermonkeyWebSocketServer> {
  */
 function ensureConnected(wsServer: TampermonkeyWebSocketServer): void {
     if (!wsServer.isConnected) {
-        throw new Error('Not connected to Tampermonkey Editors. Call tampermonkey.get-connection-code first to get the connection code, then enter it in the Tampermonkey Editors extension to connect.');
+        throw new Error('Not connected to Tampermonkey Editors. Call tampermonkey_get_connection_code first to get the connection code, then enter it in the Tampermonkey Editors extension to connect.');
     }
 }
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const init = async (mcpServer: McpServer) => {
 
-    // Tool: tampermonkey.get-connection-code
+    // Tool: tampermonkey_get_connection_code
     mcpServer.tool(
-        'tampermonkey.get-connection-code',
+        'tampermonkey_get_connection_code',
         `
         REQUIRED FIRST STEP: Get the connection code to connect Tampermonkey Editors to the MCP server.
 
@@ -50,7 +50,7 @@ export const init = async (mcpServer: McpServer) => {
         2. Open Tampermonkey Editors extension in your browser
         3. Enter the code in the extension popup
         4. The extension connects to the MCP server's WebSocket
-        5. After connection, you can use tampermonkey.list, tampermonkey.get, tampermonkey.patch, tampermonkey.put, tampermonkey.delete
+        5. After connection, you can use tampermonkey_list, tampermonkey_get, tampermonkey_patch, tampermonkey_put, tampermonkey_delete
 
         **Output:**
             - \`code\`: The connection code to enter in Tampermonkey Editors
@@ -63,16 +63,16 @@ export const init = async (mcpServer: McpServer) => {
                 content: [
                     {
                         type: 'text',
-                        text: `Connection code: ${code}\n\nIMPORTANT: The MCP server opens a WebSocket server and waits for Tampermonkey Editors to connect. Ask the user to: \n\n1. Open the Tampermonkey Editors extension\n2. Enter this code in the extension\n3. The extension will connect to the MCP server\n\nAfter the extension connects, you can use the other tampermonkey.* tools.`,
+                        text: `Connection code: ${code}\n\nIMPORTANT: The MCP server opens a WebSocket server and waits for Tampermonkey Editors to connect. Ask the user to: \n\n1. Open the Tampermonkey Editors extension\n2. Enter this code in the extension\n3. The extension will connect to the MCP server\n\nAfter the extension connects, you can use the other tampermonkey_* tools.`,
                     },
                 ],
             };
         }
     );
 
-    // Tool: tampermonkey.list
+    // Tool: tampermonkey_list
     mcpServer.tool(
-        'tampermonkey.list',
+        'tampermonkey_list',
         `
         List all userscripts available in Tampermonkey.
 
@@ -130,9 +130,9 @@ export const init = async (mcpServer: McpServer) => {
         }
     );
 
-    // Tool: tampermonkey.get
+    // Tool: tampermonkey_get
     mcpServer.tool(
-        'tampermonkey.get',
+        'tampermonkey_get',
         `
         Get the content of a specific userscript.
 
@@ -178,9 +178,9 @@ export const init = async (mcpServer: McpServer) => {
         }
     );
 
-    // Tool: tampermonkey.patch
+    // Tool: tampermonkey_patch
     mcpServer.tool(
-        'tampermonkey.patch',
+        'tampermonkey_patch',
         `
         Update the content of a userscript.
 
@@ -227,9 +227,9 @@ export const init = async (mcpServer: McpServer) => {
         }
     );
 
-    // Tool: tampermonkey.put
+    // Tool: tampermonkey_put
     mcpServer.tool(
-        'tampermonkey.put',
+        'tampermonkey_put',
         `
         Create a new userscript.
 
@@ -275,9 +275,9 @@ export const init = async (mcpServer: McpServer) => {
         }
     );
 
-    // Tool: tampermonkey.delete
+    // Tool: tampermonkey_delete
     mcpServer.tool(
-        'tampermonkey.delete',
+        'tampermonkey_delete',
         `
         Delete a userscript by path.
 

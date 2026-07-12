@@ -1,7 +1,7 @@
 {
   "name": "tampermonkey-mcp",
   "mcpName": "io.github.Tampermonkey/tampermonkey-mcp",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "index.js",
   "scripts": {
     "init": "",

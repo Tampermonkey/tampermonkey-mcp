@@ -3,4 +3,5 @@ dist
 other
 .claude
 .vscode
+CLAUDE.md
 *.tgz

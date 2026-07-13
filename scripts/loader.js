@@ -55,7 +55,7 @@ export function resolve(specifier, context, nextResolve) {
     // console.log('resolve', {context, specifier});
     const needsPostfix = VALID_PREFIXES.some(p => specifier.startsWith(p)) && !extname(basename(specifier));
 
-    const postfix = specifier.startsWith('@modelcontextprotocol')
+    const postfix = specifier.startsWith('@modelcontextprotocol') && !specifier.endsWith('.js')
         ? '.js'
         : needsPostfix ? findExistingPostfix(specifier, context) : '';
 

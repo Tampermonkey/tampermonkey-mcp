@@ -175,13 +175,13 @@ Extension                              MCP Server
 * **Purpose**: Create a new userscript with the given name and namespace.
 * **Input**: `value` (new script), optional `lastModified`.
 * **Output**: Success confirmation, path of created script, or error.
-* **Requires**: Tampermonkey Editors 1.0.6+
+* **Requires**: Tampermonkey Editors 1.0.6+ and Tampermonkey 5.6+
 
 ### `tampermonkey_delete`
 * **Purpose**: Delete an existing userscript.
 * **Input**: `path` (from list).
 * **Output**: Success confirmation or error.
-* **Requires**: Tampermonkey Editors 1.0.6+
+* **Requires**: Tampermonkey Editors 1.0.6+ and Tampermonkey 5.6+
 
 
 # Basic testing

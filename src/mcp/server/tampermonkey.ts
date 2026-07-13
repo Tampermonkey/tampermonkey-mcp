@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
-import { TampermonkeyWebSocketServer } from './tampermonkey-ws-client';
+import { TampermonkeyWebSocketServer, allowedActions, onAllowedActionsReady } from './tampermonkey-ws-client';
 import { logger as console } from '../../shared/logger';
 
 let serverPromise: Promise<TampermonkeyWebSocketServer> | null = null;
@@ -31,8 +31,52 @@ function ensureConnected(wsServer: TampermonkeyWebSocketServer): void {
     }
 }
 
+/**
+ * Track registered tool handles so we can disable unsupported tools later.
+ * Keyed by MCP server instance to support both stdio (singleton) and HTTP (per-session).
+ */
+const toolHandlesByServer = new WeakMap<McpServer, {
+    put?: { disable: () => void };
+    delete?: { disable: () => void };
+}>();
+
+/**
+ * Disable tools that are not supported by the connected Tampermonkey version.
+ * Tampermonkey 5.5+ only allows: ['options', 'list', 'get', 'patch']
+ * Called both via callback (stdio) and at server creation time (HTTP).
+ */
+function applyAllowedActions(mcpServer: McpServer): void {
+    const handles = toolHandlesByServer.get(mcpServer);
+    if (!handles) return;
+
+    if (handles.put && !allowedActions.includes('put')) {
+        handles.put.disable();
+        console.log('[TampermonkeyWS] Tool tampermonkey_put disabled (not supported by connected Tampermonkey)');
+    }
+    if (handles.delete && !allowedActions.includes('delete')) {
+        handles.delete.disable();
+        console.log('[TampermonkeyWS] Tool tampermonkey_delete disabled (not supported by connected Tampermonkey)');
+    }
+}
+
+/**
+ * Check if an action is allowed, throw descriptive error if not.
+ * Runtime guard for HTTP sessions created before connection.
+ */
+function ensureActionAllowed(action: string): void {
+    if (allowedActions.length === 0) return; // Not yet discovered, allow
+    if (!allowedActions.includes(action)) {
+        throw new Error(
+            `Action '${action}' is not supported by the connected Tampermonkey version ` +
+            `(allowed: ${allowedActions.filter(a => a !== 'options').join(', ')}). ` +
+            `This tool is only available with Tampermonkey versions that support script ${action === 'put' ? 'creation' : 'deletion'} via external API.`
+        );
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const init = async (mcpServer: McpServer) => {
+    const handles: { put?: { disable: () => void }; delete?: { disable: () => void } } = {};
 
     // Tool: tampermonkey_get_connection_code
     mcpServer.tool(
@@ -50,12 +94,13 @@ export const init = async (mcpServer: McpServer) => {
         2. Open Tampermonkey Editors extension in your browser
         3. Enter the code in the extension popup
         4. The extension connects to the MCP server's WebSocket
-        5. After connection, you can use tampermonkey_list, tampermonkey_get, tampermonkey_patch, tampermonkey_put, tampermonkey_delete
+        5. After connection, you can use tampermonkey_list, tampermonkey_get, tampermonkey_patch, and (if supported) tampermonkey_put, tampermonkey_delete
 
         **Output:**
             - \`code\`: The connection code to enter in Tampermonkey Editors
         `,
         {},
+        { idempotentHint: true },
         async () => {
             const wsServer = await getServer();
             const code = wsServer.code;
@@ -92,6 +137,7 @@ export const init = async (mcpServer: McpServer) => {
             pattern: z.string().optional().describe('Filter scripts by name pattern'),
             includePattern: z.array(z.string()).optional().describe('Filter scripts by include URL pattern'),
         },
+        { readOnlyHint: true },
         async (args) => {
             const wsServer = await getServer();
             ensureConnected(wsServer);
@@ -149,6 +195,7 @@ export const init = async (mcpServer: McpServer) => {
             path: z.string().describe('The script or resource path (<script-uuid>/source, <script-uuid>/storage or <script-uuid>/<external-resource-url>'),
             ifNotModifiedSince: z.number().optional().describe('Unix timestamp - only return if script was modified after this time'),
         },
+        { readOnlyHint: true },
         async (args) => {
             const wsServer = await getServer();
             ensureConnected(wsServer);
@@ -198,6 +245,7 @@ export const init = async (mcpServer: McpServer) => {
             value: z.string().describe('The new script content'),
             lastModified: z.number().optional().describe('Unix timestamp for optimistic locking'),
         },
+        { destructiveHint: true },
         async (args) => {
             const wsServer = await getServer();
             ensureConnected(wsServer);
@@ -228,10 +276,14 @@ export const init = async (mcpServer: McpServer) => {
     );
 
     // Tool: tampermonkey_put
-    mcpServer.tool(
+    const putResult = mcpServer.tool(
         'tampermonkey_put',
         `
         Create a new userscript.
+
+        **Note:** This tool requires Tampermonkey version 5.6+ With Tampermonkey 5.5+,
+        script creation via external API is not supported (returns 405 error).
+        Use browser automation as an alternative for newer versions.
 
         **Input:**
             - \`value\`: The script source code content
@@ -246,9 +298,11 @@ export const init = async (mcpServer: McpServer) => {
             value: z.string().describe('The script source code content'),
             lastModified: z.number().optional().describe('Unix timestamp for optimistic locking'),
         },
+        { destructiveHint: true },
         async (args) => {
             const wsServer = await getServer();
             ensureConnected(wsServer);
+            ensureActionAllowed('put');
 
             try {
                 const resp = await wsServer.put(args.value, args.lastModified);
@@ -274,12 +328,16 @@ export const init = async (mcpServer: McpServer) => {
             }
         }
     );
+    handles.put = putResult;
 
     // Tool: tampermonkey_delete
-    mcpServer.tool(
+    const deleteResult = mcpServer.tool(
         'tampermonkey_delete',
         `
         Delete a userscript by path.
+
+        **Note:** This tool requires Tampermonkey version 5.6+ With Tampermonkey 5.5+,
+        script deletion via external API is not supported (returns 405 error).
 
         **Input:**
             - \`path\`: The script or resource path (<script-uuid>/source, <script-uuid>/storage or <script-uuid>/<external-resource-url>)
@@ -291,9 +349,11 @@ export const init = async (mcpServer: McpServer) => {
         {
             path: z.string().describe('The script or resource path (<script-uuid>/source, <script-uuid>/storage or <script-uuid>/<external-resource-url>)'),
         },
+        { destructiveHint: true },
         async (args) => {
             const wsServer = await getServer();
             ensureConnected(wsServer);
+            ensureActionAllowed('delete');
 
             try {
                 const resp = await wsServer.delete(args.path);
@@ -319,6 +379,21 @@ export const init = async (mcpServer: McpServer) => {
             }
         }
     );
+    handles.delete = deleteResult;
+
+    // Track handles for this MCP server instance so we can disable tools later
+    toolHandlesByServer.set(mcpServer, handles);
+
+    // If allowed actions are already known (connection happened before this server was created),
+    // apply restrictions immediately (HTTP per-session case)
+    if (allowedActions.length > 0) {
+        applyAllowedActions(mcpServer);
+    } else {
+        // Otherwise, wait for connection to discover allowed actions (stdio case)
+        onAllowedActionsReady(() => {
+            applyAllowedActions(mcpServer);
+        });
+    }
 
     console.log('[TampermonkeyWS] MCP tools initialized');
 };

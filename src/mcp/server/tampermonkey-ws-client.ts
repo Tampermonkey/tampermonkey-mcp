@@ -14,6 +14,35 @@ import { logger as console } from '../../shared/logger';
 
 const MIN_PORT_OFFSET = 1024;
 
+/**
+ * Globally tracked list of actions allowed by the connected Tampermonkey instance.
+ * Populated when the browser extension connects (via 'options' query).
+ * Tampermonkey 5.5+ only allows: ['options', 'list', 'get', 'patch']
+ * Older versions also allow: 'put', 'delete'
+ */
+export let allowedActions: string[] = [];
+
+/**
+ * Callbacks fired when allowed actions are discovered (after WebSocket connect).
+ * Used to notify MCP server instances so they can disable unsupported tools.
+ */
+const onAllowedActionsDiscovered: Array<(actions: string[]) => void> = [];
+
+export function onAllowedActionsReady(cb: (actions: string[]) => void): void {
+    if (allowedActions.length > 0) {
+        // Already discovered — fire immediately
+        cb(allowedActions);
+    } else {
+        onAllowedActionsDiscovered.push(cb);
+    }
+}
+
+export interface OptionsExternalResponse {
+    messageId: string;
+    allow?: string[];
+    error?: { number: number; message: string };
+}
+
 export interface ListExternalResponse {
     messageId: string;
     list: Array<{
@@ -47,7 +76,7 @@ export interface DeleteExternalResponse {
     error?: { number: number; message: string };
 }
 
-export type ExternalResponse = ListExternalResponse | GetExternalResponse | UpdateExternalResponse | PutExternalResponse | DeleteExternalResponse;
+export type ExternalResponse = OptionsExternalResponse | ListExternalResponse | GetExternalResponse | UpdateExternalResponse | PutExternalResponse | DeleteExternalResponse;
 
 export interface UserscriptRequest {
     action: 'list' | 'get' | 'patch' | 'put' | 'delete' | 'options';
@@ -218,6 +247,9 @@ export class TampermonkeyWebSocketServer {
                     this._ws.close(4009, 'Connection superseded');
                 }
 
+                // Reset allowed actions for new connection — will be re-discovered below
+                allowedActions = [];
+
                 this._ws = ws;
 
                 // Start ping interval to keep connection alive
@@ -248,12 +280,57 @@ export class TampermonkeyWebSocketServer {
 
                 console.log('[TampermonkeyWS] Connection ready');
                 this._connected_cb();
+
+                // Discover allowed actions from Tampermonkey extension (non-blocking)
+                // Fire-and-forget: don't block connection resolution waiting for response
+                this._discoverAllowedActions().catch((e) => {
+                    console.warn('[TampermonkeyWS] Failed to query allowed actions, assuming all allowed:', e);
+                });
             } catch (e) {
                 console.error('[TampermonkeyWS] Auth error:', e);
                 ws.close(3003, 'Auth error');
             }
         })()
         .catch(e => console.error('[TampermonkeyWS] Auth error:', e));
+    }
+
+    /**
+     * Query allowed actions from Tampermonkey extension.
+     * Returns the list of actions the extension supports.
+     * Tampermonkey 5.5+ restricts to: ['options', 'list', 'get', 'patch']
+     */
+    async options(): Promise<OptionsExternalResponse> {
+        const resp = await this._command({ action: 'options' });
+        return resp as OptionsExternalResponse;
+    }
+
+    /**
+     * Discover allowed actions and notify MCP server instances.
+     * Called as fire-and-forget after connection (doesn't block connected promise).
+     */
+    private async _discoverAllowedActions(): Promise<void> {
+        const optionsResp = await this.options();
+        if (optionsResp.error) {
+            // 'options' not supported by this version — assume all tools are available
+            console.log(`[TampermonkeyWS] Options query returned error, assuming all actions allowed`);
+            return;
+        }
+        const allow = optionsResp.allow;
+        if (allow && allow.length > 0) {
+            allowedActions = allow;
+            console.log(`[TampermonkeyWS] Allowed actions: ${allowedActions.join(', ')}`);
+        } else {
+            // No allow list — assume all tools available (older extension versions)
+            console.log('[TampermonkeyWS] No allow list in options response, assuming all actions allowed');
+        }
+        // Notify all waiting MCP server instances
+        for (const cb of onAllowedActionsDiscovered) {
+            try {
+                cb(allowedActions);
+            } catch (e) {
+                console.error('[TampermonkeyWS] Error in allowed actions callback:', e);
+            }
+        }
     }
 
     /**

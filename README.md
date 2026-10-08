@@ -27,7 +27,7 @@ Your assistant will call `tampermonkey_get_connection_code` and return a connect
 
 # Claude Code configuration example
 ```
-npm install -g claude
+npm install -g @anthropic-ai/claude-code
 
 // either use your local checkout
 npm run watch

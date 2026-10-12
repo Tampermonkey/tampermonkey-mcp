@@ -9,10 +9,29 @@
  * where MIN_PORT_OFFSET = 1024
  */
 
+import { lookup } from 'node:dns/promises';
 import { WebSocketServer, WebSocket } from 'ws';
 import { logger as console } from '../../shared/logger';
 
 const MIN_PORT_OFFSET = 1024;
+
+/**
+ * Resolve every address a host name maps to.
+ *
+ * The Tampermonkey Editors extension connects to `ws://localhost:<port>`, and `localhost`
+ * commonly resolves to both `127.0.0.1` (IPv4) and `::1` (IPv6). We need the full list so
+ * the server can listen on all of them. Falls back to the raw host when it is an IP literal
+ * or when resolution fails.
+ */
+async function resolveHostAddresses(host: string): Promise<string[]> {
+    try {
+        const resolved = await lookup(host, { all: true });
+        const addresses = resolved.map(entry => entry.address);
+        return addresses.length ? addresses : [host];
+    } catch {
+        return [host];
+    }
+}
 
 export interface ListExternalResponse {
     messageId: string;
@@ -72,6 +91,10 @@ export interface UserscriptRequest {
 
 export class TampermonkeyWebSocketServer {
     private wss!: WebSocketServer;
+    /** Extra listeners for the remaining addresses `host` resolves to. */
+    private extraWss: WebSocketServer[] = [];
+    /** Set by dispose() so a still-pending start does not leave listeners behind. */
+    private _disposed = false;
     private _ws: WebSocket | null = null;
     private _pending = new Map<string, (data: ExternalResponse) => void>();
     private _msgId = 1;
@@ -100,7 +123,18 @@ export class TampermonkeyWebSocketServer {
     }
 
     private _startServer() {
-        this.wss = new WebSocketServer({ port: 0, host: this.host });
+        void this._startListeners();
+    }
+
+    private async _startListeners() {
+        // The extension dials `ws://localhost:<port>`, so the server has to be reachable on
+        // *every* address `localhost` resolves to. Listening on a single address makes the
+        // extension fail with ECONNREFUSED whenever the client picks the other address
+        // family, and the extension surfaces that only as
+        // "Error while connecting: Unknown error".
+        const addresses = await resolveHostAddresses(this.host);
+        if (this._disposed) return;
+        this.wss = this._listen(addresses[0], 0);
 
         this.wss.on('listening', () => {
             const address = this.wss.address();
@@ -108,12 +142,35 @@ export class TampermonkeyWebSocketServer {
             this._code = '' + ((this.port - MIN_PORT_OFFSET).toString(32)) + this.auth + this.authEcho;
             console.log(`[TampermonkeyWS] WebSocket server started on port ${this.port}`);
             console.log(`[TampermonkeyWS] Connection code: ${this._code}`);
+
+            // dispose() may have run while the addresses were being resolved.
+            if (this._disposed) {
+                void this.dispose();
+                return;
+            }
+
+            // Reuse the port picked for the first address so every listener shares one code.
+            for (const host of addresses.slice(1)) {
+                this.extraWss.push(this._listen(host, this.port));
+            }
+        });
+    }
+
+    private _listen(host: string, port: number): WebSocketServer {
+        const wss = new WebSocketServer({ port, host });
+
+        wss.on('error', (err: Error) => {
+            // An extra address family may be unavailable (IPv6 disabled, custom hosts file).
+            // That must not take the whole server down - the remaining listeners still work.
+            console.warn(`[TampermonkeyWS] Listener on ${host}:${port} unavailable: ${err.message}`);
         });
 
-        this.wss.on('connection', (ws) => {
+        wss.on('connection', (ws) => {
             console.log('[TampermonkeyWS] New connection');
             this._handleConnection(ws);
         });
+
+        return wss;
     }
 
     private _prepareConnection(error?: Error) {
@@ -300,6 +357,7 @@ export class TampermonkeyWebSocketServer {
      * Dispose of the WebSocket server
      */
     async dispose() {
+        this._disposed = true;
         if (this._pingInterval) {
             clearInterval(this._pingInterval);
             this._pingInterval = null;
@@ -308,16 +366,20 @@ export class TampermonkeyWebSocketServer {
             this._ws.terminate();
             this._ws = null;
         }
-        for (const client of this.wss.clients) {
-            client.terminate();
+        for (const wss of [this.wss, ...this.extraWss]) {
+            if (!wss) continue;
+            for (const client of wss.clients) {
+                client.terminate();
+            }
+            // Access the internal HTTP server to close and unref it
+            // This ensures Jest doesn't detect an open handle
+            const internalServer = (wss as unknown as { _server: import('http').Server | null })._server;
+            wss.close();
+            if (internalServer) {
+                internalServer.close();
+                internalServer.unref();
+            }
         }
-        // Access the internal HTTP server to close and unref it
-        // This ensures Jest doesn't detect an open handle
-        const internalServer = (this.wss as unknown as { _server: import('http').Server | null })._server;
-        this.wss.close();
-        if (internalServer) {
-            internalServer.close();
-            internalServer.unref();
-        }
+        this.extraWss = [];
     }
 }

@@ -3,8 +3,30 @@
  * Tests for the actual WebSocket server implementation
  */
 
+import { createServer } from 'net';
 import { WebSocket } from 'ws';
 import { TampermonkeyWebSocketServer } from '../src/mcp/server/tampermonkey-ws-client';
+
+/** Whether this machine can bind the IPv6 loopback address at all. */
+function canBindIpv6Loopback(): Promise<boolean> {
+    return new Promise((resolve) => {
+        const probe = createServer();
+        probe.once('error', () => resolve(false));
+        probe.listen(0, '::1', () => probe.close(() => resolve(true)));
+    });
+}
+
+/** Open a WebSocket and resolve once the handshake succeeded. */
+function connect(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const client = new WebSocket(url);
+        client.on('open', () => {
+            client.close();
+            resolve();
+        });
+        client.on('error', reject);
+    });
+}
 
 describe('TampermonkeyWebSocketServer', () => {
     let wsServer: TampermonkeyWebSocketServer;
@@ -223,6 +245,45 @@ describe('TampermonkeyWebSocketServer', () => {
 
             const initialPort = wsServer.port;
             expect(initialPort).toBeGreaterThan(0);
+        });
+    });
+
+    describe('Loopback Address Families', () => {
+        // The extension dials `ws://localhost:<port>`. `localhost` resolves to both
+        // 127.0.0.1 and ::1 on many systems, so the server must answer on either one.
+        it('should accept connections on 127.0.0.1 and ::1', async () => {
+            const hasIpv6Loopback = await canBindIpv6Loopback();
+            if (!hasIpv6Loopback) {
+                console.warn('Skipping the ::1 assertion: IPv6 loopback is unavailable here');
+            }
+
+            wsServer = new TampermonkeyWebSocketServer();
+            await wsServer.onCode();
+
+            const urls = [`ws://127.0.0.1:${wsServer.port}`];
+            if (hasIpv6Loopback) urls.push(`ws://[::1]:${wsServer.port}`);
+
+            for (const url of urls) {
+                await expect(connect(url)).resolves.toBeUndefined();
+            }
+        });
+
+        it('should use the same port for every listener', async () => {
+            const hasIpv6Loopback = await canBindIpv6Loopback();
+            if (!hasIpv6Loopback) {
+                console.warn('Skipping the ::1 assertion: IPv6 loopback is unavailable here');
+                return;
+            }
+
+            wsServer = new TampermonkeyWebSocketServer();
+            await wsServer.onCode();
+
+            // Both families must serve the port encoded in the single connection code.
+            const encodedPort = wsServer.code.substring(0, wsServer.code.length - 2);
+            const decodedPort = parseInt(encodedPort, 32) + 1024;
+            expect(decodedPort).toBe(wsServer.port);
+
+            await expect(connect(`ws://[::1]:${decodedPort}`)).resolves.toBeUndefined();
         });
     });
 });

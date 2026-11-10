@@ -13,13 +13,15 @@
     "watch": "NODE_OPTIONS='--experimental-loader=./scripts/loader.js --require=./scripts/suppress-experimental-warnings.cjs' sh -c 'tsc-watch --onSuccess \"node dist/index.js --transport=http $*\"' --",
     "debug": "NODE_OPTIONS='--experimental-loader=./scripts/loader.js --require=./scripts/suppress-experimental-warnings.cjs' sh -c 'tsc-watch --onSuccess \"node --inspect-brk dist/index.js --transport=http $*\"' --",
     "test": "npm run build && npm run test:run --",
+    "test:native": "npm run build && node --test test/native-protocol.test.mjs test/native-integration.test.mjs",
     "test:run": "NODE_OPTIONS='--experimental-loader=./scripts/loader.js --require=./scripts/suppress-experimental-warnings.cjs' node node_modules/jest/bin/jest.js --",
     "test:debug": "NODE_OPTIONS='--experimental-loader=./scripts/loader.js --require=./scripts/suppress-experimental-warnings.cjs' sh -c 'tsc-watch --onSuccess \"node --inspect-brk ./node_modules/jest/bin/jest.js --runInBand $@\"' --",
     "getName": "echo $npm_package_name",
     "getVersion": "echo $npm_package_version"
   },
   "bin": {
-    "tampermonkey-mcp": "bin/tampermonkey-mcp"
+    "tampermonkey-mcp": "bin/tampermonkey-mcp",
+    "tampermonkey-native-host": "bin/tampermonkey-native-host"
   },
   "engines": {
     "node": ">=22",
@@ -37,6 +39,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@types/ws": "^8.18.0",
+    "selfsigned": "5.5.0",
     "ws": "^8.18.3",
     "zod": "^4.3.6"
   },

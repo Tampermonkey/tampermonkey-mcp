@@ -6,8 +6,8 @@ export const getCommandLineArgs = () => {
         .option('transport', {
             alias: 't',
             type: 'string',
-            choices: ['stdio', 'http'],
-            description: 'Transport type to use (stdio or http)',
+            choices: ['stdio', 'http', 'native'],
+            description: 'Transport type to use (stdio, http or native messaging)',
         })
         .option('port', {
             alias: 'p',
@@ -18,6 +18,8 @@ export const getCommandLineArgs = () => {
             alias: 'o',
             choices: [ 'dynamic', 'static' ],
         })
+        .option('install-native-host', { type: 'string', choices: ['firefox', 'chrome'] })
+        .option('uninstall-native-host', { type: 'string', choices: ['firefox', 'chrome'] })
         .help()
         .parseSync()
     };
@@ -25,5 +27,7 @@ export const getCommandLineArgs = () => {
         transport?: string
         port?: number
         mode?: string
+        'install-native-host'?: 'firefox' | 'chrome'
+        'uninstall-native-host'?: 'firefox' | 'chrome'
     };
 };
